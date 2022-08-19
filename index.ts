@@ -1,7 +1,8 @@
 import puppeteer from "puppeteer";
 import config from "./config.json";
 import async from "async";
-var cardData = [];
+import promptSync from "prompt-sync";
+const cardData = [];
 class DeleteTask {
   numDeleted: number;
   username: string;
@@ -21,7 +22,7 @@ class DeleteTask {
       headless: false,
       executablePath: config.chrome_path,
     });
-    var page = await this.browser.newPage();
+    const page = await this.browser.newPage();
 
     await page.setRequestInterception(true);
     page.on("request", async (request) => {
@@ -35,12 +36,12 @@ class DeleteTask {
     await page.goto("https://verified.capitalone.com/auth/signin", {
       waitUntil: "networkidle2",
     });
-    page.waitForXPath('//*[@id="ods-input-0"]');
-    var res = await page.$x('//*[@id="ods-input-0"]');
+    await page.waitForXPath('//*[@id="ods-input-0"]');
+    const res = await page.$x('//*[@id="ods-input-0"]');
     await res[0].type(this.username);
 
-    page.waitForXPath('//*[@id="ods-input-1"]');
-    var res2 = await page.$x('//*[@id="ods-input-1"]');
+    await page.waitForXPath('//*[@id="ods-input-1"]');
+    const res2 = await page.$x('//*[@id="ods-input-1"]');
     await res2[0].type(this.password);
 
     const button = await page.$x(
@@ -54,13 +55,13 @@ class DeleteTask {
       waitUntil: "networkidle0",
       timeout: 0,
     });
-    var found: number = 0;
-    var taskList = [];
-    for (var i = 0; i < cardData.length; i++) {
-      for (var j = 0; j < cardData[i].data.entries.length; j++) {
-        if (cardData[i].data.entries[j].tokenName.includes(this.name)) {
+    let found = 0;
+    const taskList = [];
+    for (let i = 0; i < cardData.length; i++) {
+      for (let j = 0; j < cardData[i].data.entries.length; j++) {
+        if (cardData[i].data.entries[j].tokenName.toLowerCase().includes(this.name)) {
           found++;
-          var json = {};
+          const json = {};
           json["reference"] = cardData[i].reference;
           json["token"] = cardData[i].data.entries[j].tokenReferenceId;
           taskList.push(json);
@@ -69,7 +70,15 @@ class DeleteTask {
     }
     console.log(`${found} cards found with the matching keyword!`);
 
-    var deleted: number = 0;
+    await page.setRequestInterception(true);
+    page.off("request", async (request) => {
+      interceptReq(request);
+    });
+    page.off("response", async (response) => {
+      interceptRes(response);
+    });
+    await page.close()
+    let deleted = 0;
     setTerminalTitle(
       "Capital One Eno VCC Deleter | Deleting Cards with Keyword: " +
         this.name +
@@ -79,11 +88,11 @@ class DeleteTask {
         found
     );
 
-    var q = async.queue(async (task, callback) => {
+    const q = async.queue(async (task, callback) => {
       console.log(`Deleting Card ${task.token}`);
-      var taskWindow = await this.browser.newPage();
+      const taskWindow = await this.browser.newPage();
       await taskWindow.goto(
-        `https://myaccounts.capitalone.com/VirtualCards/editVirtualCard?tokenRef=${task.token}&cardRef=${task.cardRef}&reveal=false`,
+        `https://myaccounts.capitalone.com/VirtualCards/editVirtualCard?tokenRef=${task.token}&cardRef=${task.token}&reveal=false`,
         { waitUntil: "networkidle0" }
       );
 
@@ -91,8 +100,9 @@ class DeleteTask {
         'document.getElementsByClassName("deleteLink vc-delete-button c1-ease-button--full-width c1-ease-button c1-ease-button--progressive c1-ease-button--text")[0].click()'
       );
       await sleep(300);
-      //await page.evaluate('document.getElementsByClassName("deleteButton c1-ease-button--full-width c1-ease-button c1-ease-button--destructive")[0].click()')
-      await taskWindow.close();
+      //await taskWindow.evaluate('document.getElementsByClassName("deleteButton c1-ease-button--full-width c1-ease-button c1-ease-button--destructive")[0].click()')
+      await sleep(300);
+      //await taskWindow.close();
       console.log(`${task.token} successfully deleted!`);
       deleted++;
       setTerminalTitle(
@@ -106,24 +116,24 @@ class DeleteTask {
       callback();
     }, config.task_amount);
 
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     q.push(taskList, function (err) {});
 
-    q.drain(async () => {
+    q.drain(() => {
       console.log("All selected cards have been deleted.");
-      await this.browser.close()
     });
   }
 }
 
 async function verifyLogin(page) {
-  var link = await page.evaluate("window.location.href");
+  let link = await page.evaluate("window.location.href");
   if (!link.startsWith("https://myaccounts.capitalone.com/accountSummary")) {
     await page.waitForNavigation({
       waitUntil: "load",
       timeout: 0,
     });
     link = await page.evaluate("window.location.href");
-    verifyLogin(page);
+    await verifyLogin(page);
   }
   return;
 }
@@ -141,10 +151,10 @@ async function interceptRes(response) {
       "https://myaccounts.capitalone.com/ease-app-web/customer/virtualcards/tokens?cardReferenceId="
     )
   ) {
-    var reference = response._url.split("cardReferenceId=")[1];
-    var data = await response.json();
+    const reference = response._url.split("cardReferenceId=")[1];
+    const data = await response.json();
     if (data["entries"]) {
-      var json = { reference: reference, data: data };
+      const json = { reference: reference, data: data };
       cardData.push(json);
     }
   }
@@ -159,12 +169,12 @@ function setTerminalTitle(title) {
 function main() {
   console.clear();
   setTerminalTitle("Capital One Eno VCC Deleter");
-  const prompt = require("prompt-sync")();
-  const kw = prompt("Enter the keyword of the cards you want to delete: ");
+  const prompt = promptSync();
+  const kw = prompt("Enter the keyword of the cards you want to delete: ").toLowerCase()
   setTerminalTitle(
     "Capital One Eno VCC Deleter | Deleting Cards with Keyword: " + kw
   );
-  var task = new DeleteTask(config.username, config.password, kw);
+  const task = new DeleteTask(config.username, config.password, kw);
   task.initialize();
 }
 

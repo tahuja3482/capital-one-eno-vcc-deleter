@@ -13,11 +13,14 @@
   "description": "",
   "dependencies": {
     "async": "^3.2.3",
-    "prompt-sync": "^4.1.6",
+    "prompt-sync": "^4.2.0",
     "puppeteer": "^13.1.2",
     "ts-node": "^10.4.0"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.10.1",
+    "@typescript-eslint/parser": "^5.10.1",
+    "eslint": "^8.7.0",
     "typescript": "^4.5.4"
   }
 }
